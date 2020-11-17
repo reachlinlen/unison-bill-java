@@ -11,10 +11,7 @@ import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.borders.Border;
 import com.itextpdf.layout.element.*;
-import com.itextpdf.layout.property.HorizontalAlignment;
-import com.itextpdf.layout.property.TabAlignment;
-import com.itextpdf.layout.property.TextAlignment;
-import com.itextpdf.layout.property.UnitValue;
+import com.itextpdf.layout.property.*;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -36,7 +33,7 @@ import java.time.LocalDate;
 @Service
 public class EmpService {
 
-    public ResponseEntity<Resource> generateBill(String empName, LocalDate startDate, LocalDate endDate, String clientName, String fileName) throws FileNotFoundException, IOException {
+    public ResponseEntity<Resource> generateBill(String attention, String PONum, String projName, String costCentre, String account, String clients, MultipartFile file) throws FileNotFoundException, IOException {
         String dest = "C:\\Users\\unison\\Documents\\new.pdf";
         PdfWriter pdfWriter = new PdfWriter(dest);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -95,12 +92,11 @@ public class EmpService {
                 .setFontSize(10);
         document.add(address);
         Text webAddressText = new Text("www.unisonconsulting.com.sg");
-        Paragraph webAddress = new Paragraph()
-                                    .add(webAddressText).setUnderline()
-                                    .setFontColor(linkColor)
-                                    .setFontSize(9)
-                                    .add("\n")
-                                    .add("\n");
+        Paragraph webAddress = new Paragraph().add(webAddressText).setUnderline()
+                                                .setFontColor(linkColor)
+                                                .setFontSize(10)
+                                                .add("\n")
+                                                .add("\n");
         document.add(webAddress);
     }
 
@@ -173,12 +169,12 @@ public class EmpService {
                         .add(new Paragraph(billing)).add(new Paragraph("\n"))
                         .setBorder(Border.NO_BORDER).setFontSize(10);
         table.addCell(cell1);
-        Cell cell2 = new Cell(1,1).add(new Paragraph("\n"))
-                                                    .add(new Paragraph("Date :"))
+        Cell cell2 = new Cell(1,1).add(new Paragraph("Date :"))
                                                     .add(new Paragraph("Due Date :"))
                                                     .add(new Paragraph("Invoice Number :"))
                                                     .setTextAlignment(TextAlignment.RIGHT)
-                                                    .setBorder(Border.NO_BORDER).setFontSize(10);
+                                                    .setBorder(Border.NO_BORDER).setFontSize(10)
+                                                    .setVerticalAlignment(VerticalAlignment.TOP);
         table.addCell(cell2);
         document.add(table);
     }
