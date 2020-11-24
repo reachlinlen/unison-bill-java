@@ -15,10 +15,14 @@ import com.itextpdf.layout.borders.Border;
 import com.itextpdf.layout.element.*;
 import com.itextpdf.layout.element.Image;
 import com.itextpdf.layout.property.*;
+import com.unison.billgeneration.model.Invoice;
+import com.unison.billgeneration.repository.EmpRepository;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -30,16 +34,32 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.*;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Service
 public class EmpService {
 
-    public ResponseEntity<Resource> generateBill(String attention, String PONum, String projName, String costCentre, String account, String clients, MultipartFile file) throws FileNotFoundException, IOException {
+    private final String pdfLocation;
+    private final Float GST;
+    private final int invoiceStartNum;
+
+    @Autowired
+    public EmpService(@Value("${pdf.storage}") String pdfLocation, @Value("${GST}") Float GST, @Value("${invoice.start.number}") int invoiceStartNum) {
+        this.pdfLocation = pdfLocation;
+        this.GST = GST;
+        this.invoiceStartNum = invoiceStartNum;
+    }
+
+    @Autowired
+    private EmpRepository empRepository;
+
+    public ResponseEntity<Resource> generateBill(String attention, String PONum, String projName, String costCentre, String account, String client, MultipartFile file) throws FileNotFoundException, IOException {
         Workbook wb = new XSSFWorkbook(file.getInputStream());
         for (Sheet sheet: wb) {
             for (int i=1;i <= sheet.getLastRowNum();i++) {
-                String dest = "C:\\Users\\unison\\Documents\\unison-" + i + ".pdf";
+                saveInvoice(sheet.getRow(i), client, costCentre);
+                String dest = pdfLocation + i + ".pdf";
                 PdfWriter pdfWriter = new PdfWriter(dest);
                 Document document = new Document(new PdfDocument(pdfWriter));
                 addStaticContent(document);
@@ -58,15 +78,31 @@ public class EmpService {
                 .body(new InputStreamResource(new ByteArrayInputStream(out.toByteArray())));
     }
 
-//    public ResponseEntity<Resource> genBillFromExcel(MultipartFile file) throws IOException {
-//        Workbook wb = new XSSFWorkbook(file.getInputStream());
-//        Sheet sheet = wb.getSheetAt(0);
-//        int i = 1;
-//        for (i = 1;i < sheet.getLastRowNum();i++) {
-//            Row row = sheet.getRow(i);
-//            row.getCell(0);
-//        }
-//    }
+    private void saveInvoice(Row row, String client, String costCentre) {
+        DecimalFormat df = new DecimalFormat("#.00");
+        Double invoiceAmt = row.getCell(3).getNumericCellValue() * (int)row.getCell(4).getNumericCellValue();
+        Invoice invoice = new Invoice();
+        String latestInvoice;
+        try {
+            latestInvoice = empRepository.getClientInvoice(client);
+            int lastInvNum = Integer.parseInt(latestInvoice.substring(row.getCell(6).getStringCellValue().length()));
+            invoice.setInvoice_num(row.getCell(6).getStringCellValue().concat(Integer.toString(++lastInvNum)));
+        }
+        catch (NullPointerException npe) {
+            String num = row.getCell(6).getStringCellValue().concat(Integer.toString(invoiceStartNum));
+            invoice.setInvoice_num(num);
+        }
+        invoice.setClient_name(client);
+        invoice.setInvoice_date(row.getCell(5).getLocalDateTimeCellValue().toLocalDate());
+        invoice.setInvoice_datetime(LocalDateTime.now());
+        invoice.setInvoice_amt(df.format(invoiceAmt));
+        invoice.setInvoice_gst(df.format(invoiceAmt*GST));
+        invoice.setInvoice_total(df.format(invoiceAmt*(1+GST)));
+        invoice.setCost_centre(costCentre);
+        invoice.setResource(row.getCell(1).getStringCellValue());
+        invoice.setInvoice_status("PENDING");
+        empRepository.save(invoice);
+    }
 
     private void addEmptyLine(Paragraph paragraph, int number) {
         for (int i = 0; i < number; i++) {
@@ -133,19 +169,13 @@ public class EmpService {
     }
 
     private void addBillTo(Document document, Row row) throws IOException {
-        String billing = "Standard Chartered Bank," + "\n" +
-                "Registration No.S16FC0027L" + "\n" +
-                "GST Group Registration No. MR-8500053-0" + "\n" +
-                "8 Marina Boulevard #27-01" + "\n" +
-                "Marina Bay Financial Centre" + "\n" +
-                "Singapore 018981";
         PdfFont bold = PdfFontFactory.createFont(StandardFonts.TIMES_BOLD);
         Text billToText = new Text("Bill To:").setFontSize(12);
         Paragraph billTo = new Paragraph().add(billToText).setFont(bold);
         document.add(billTo);
         Table table = new Table(UnitValue.createPercentArray(16));
         Cell cell1 = new Cell(1, 12)
-                        .add(new Paragraph(billing)).add(new Paragraph("\n"))
+                        .add(new Paragraph(row.getCell(7).getStringCellValue())).add(new Paragraph("\n"))
                         .setBorder(Border.NO_BORDER).setFontSize(10);
         table.addCell(cell1);
         Cell cell2 = new Cell(1,3).add(new Paragraph("Date :"))
@@ -156,7 +186,7 @@ public class EmpService {
                                                     .setVerticalAlignment(VerticalAlignment.TOP);
         table.addCell(cell2);
         LocalDate date = row.getCell(5).getLocalDateTimeCellValue().toLocalDate();
-        String invoiceNum = Integer.toString((int)row.getCell(6).getNumericCellValue());
+        String invoiceNum = row.getCell(6).getStringCellValue();
         Cell cell3 = new Cell(1,1).add(new Paragraph(date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))))
                 .add(new Paragraph(date.plusDays(45).format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))))
                 .add(new Paragraph(invoiceNum))
@@ -256,7 +286,7 @@ public class EmpService {
                 .setFontSize(10)
                 .setTextAlignment(TextAlignment.RIGHT);
         table.addCell(gstCell1);
-        Double gstAmt = unitPrice*0.07;
+        Double gstAmt = unitPrice*GST;
         Cell gstCell2 = new Cell(3, 2)
                 .add(new Paragraph(df.format(gstAmt)))
                 .setFontSize(10)
@@ -271,7 +301,7 @@ public class EmpService {
                 .setFontSize(10)
                 .setTextAlignment(TextAlignment.RIGHT);
         table.addCell(totalCell1);
-        Double tot = unitPrice*1.07;
+        Double tot = unitPrice * (1 + GST);
         Cell totalCell2 = new Cell(4, 2)
                 .add(new Paragraph(df.format(tot)))
                 .setFontSize(10)
