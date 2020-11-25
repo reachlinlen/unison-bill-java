@@ -13,10 +13,11 @@ import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.borders.Border;
 import com.itextpdf.layout.element.*;
-import com.itextpdf.layout.element.Image;
-import com.itextpdf.layout.property.*;
+import com.itextpdf.layout.property.TextAlignment;
+import com.itextpdf.layout.property.UnitValue;
+import com.itextpdf.layout.property.VerticalAlignment;
 import com.unison.billgeneration.model.Invoice;
-import com.unison.billgeneration.repository.EmpRepository;
+import com.unison.billgeneration.repository.BillGenerationRepository;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -31,28 +32,31 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Service
-public class EmpService {
+public class BillGenerationService {
 
     private final String pdfLocation;
     private final Float GST;
     private final int invoiceStartNum;
 
     @Autowired
-    public EmpService(@Value("${pdf.storage}") String pdfLocation, @Value("${GST}") Float GST, @Value("${invoice.start.number}") int invoiceStartNum) {
+    public BillGenerationService(@Value("${pdf.storage}") String pdfLocation, @Value("${GST}") Float GST, @Value("${invoice.start.number}") int invoiceStartNum) {
         this.pdfLocation = pdfLocation;
         this.GST = GST;
         this.invoiceStartNum = invoiceStartNum;
     }
 
     @Autowired
-    private EmpRepository empRepository;
+    private BillGenerationRepository billGenerationRepository;
 
     public ResponseEntity<Resource> generateBill(String attention, String PONum, String projName, String costCentre, String account, String client, MultipartFile file) throws FileNotFoundException, IOException {
         Workbook wb = new XSSFWorkbook(file.getInputStream());
@@ -84,7 +88,7 @@ public class EmpService {
         Invoice invoice = new Invoice();
         String latestInvoice;
         try {
-            latestInvoice = empRepository.getClientInvoice(client);
+            latestInvoice = billGenerationRepository.getClientInvoice(client);
             int lastInvNum = Integer.parseInt(latestInvoice.substring(row.getCell(6).getStringCellValue().length()));
             invoice.setInvoice_num(row.getCell(6).getStringCellValue().concat(Integer.toString(++lastInvNum)));
         }
@@ -101,7 +105,7 @@ public class EmpService {
         invoice.setCost_centre(costCentre);
         invoice.setResource(row.getCell(1).getStringCellValue());
         invoice.setInvoice_status("PENDING");
-        empRepository.save(invoice);
+        billGenerationRepository.save(invoice);
     }
 
     private void addEmptyLine(Paragraph paragraph, int number) {
@@ -117,8 +121,8 @@ public class EmpService {
         // Title
         Text titleText = new Text("Tax Invoice").setFontSize(18);
         Paragraph title = new Paragraph().add(titleText).setFont(bold)
-                                        .add("\n").add("\n")
-                                        .setTextAlignment(TextAlignment.CENTER);
+                .add("\n").add("\n")
+                .setTextAlignment(TextAlignment.CENTER);
         title.add("");
         document.add(title);
         // tbl with address in the left and logo on the right
@@ -127,27 +131,27 @@ public class EmpService {
         Paragraph unison = new Paragraph().add(unisonText);
         Text webAddressText = new Text("www.unisonconsulting.com.sg");
         Paragraph webAddress = new Paragraph().add(webAddressText).setUnderline()
-                                            .setFontColor(linkColor)
-                                            .setFontSize(10)
-                                            .add("\n")
-                                            .add("\n");
+                .setFontColor(linkColor)
+                .setFontSize(10)
+                .add("\n")
+                .add("\n");
         // Add address
         Cell leftCell = new Cell(1,2)
-                            .add(unison)
-                            .add(new Paragraph("1 Changi Business Park Crescent"))
-                            .add(new Paragraph("Plaza 8 Podium A ,#03-06,"))
-                            .add(new Paragraph("Singapore 486025"))
-                            .add(new Paragraph("Tel: (65) 6639 6594"))
-                            .setFontSize(10)
-                            .add(webAddress)
-                            .setBorder(Border.NO_BORDER);
+                .add(unison)
+                .add(new Paragraph("1 Changi Business Park Crescent"))
+                .add(new Paragraph("Plaza 8 Podium A ,#03-06,"))
+                .add(new Paragraph("Singapore 486025"))
+                .add(new Paragraph("Tel: (65) 6639 6594"))
+                .setFontSize(10)
+                .add(webAddress)
+                .setBorder(Border.NO_BORDER);
         companyTbl.addCell(leftCell);
         // Add logo
         ImageData logoData = ImageDataFactory.create("src/main/resources/images/logo.png");
         Image logoImage = new Image(logoData).setAutoScale(true);
         Cell rightCell = new Cell(1,1)
-                            .add(logoImage)
-                            .setBorder(Border.NO_BORDER);
+                .add(logoImage)
+                .setBorder(Border.NO_BORDER);
         companyTbl.addCell(rightCell);
         document.add(companyTbl);
     }
@@ -175,15 +179,15 @@ public class EmpService {
         document.add(billTo);
         Table table = new Table(UnitValue.createPercentArray(16));
         Cell cell1 = new Cell(1, 12)
-                        .add(new Paragraph(row.getCell(7).getStringCellValue())).add(new Paragraph("\n"))
-                        .setBorder(Border.NO_BORDER).setFontSize(10);
+                .add(new Paragraph(row.getCell(7).getStringCellValue())).add(new Paragraph("\n"))
+                .setBorder(Border.NO_BORDER).setFontSize(10);
         table.addCell(cell1);
         Cell cell2 = new Cell(1,3).add(new Paragraph("Date :"))
-                                                    .add(new Paragraph("Due Date :"))
-                                                    .add(new Paragraph("Invoice Number :"))
-                                                    .setTextAlignment(TextAlignment.RIGHT)
-                                                    .setBorder(Border.NO_BORDER).setFontSize(10)
-                                                    .setVerticalAlignment(VerticalAlignment.TOP);
+                .add(new Paragraph("Due Date :"))
+                .add(new Paragraph("Invoice Number :"))
+                .setTextAlignment(TextAlignment.RIGHT)
+                .setBorder(Border.NO_BORDER).setFontSize(10)
+                .setVerticalAlignment(VerticalAlignment.TOP);
         table.addCell(cell2);
         LocalDate date = row.getCell(5).getLocalDateTimeCellValue().toLocalDate();
         String invoiceNum = row.getCell(6).getStringCellValue();
@@ -201,8 +205,8 @@ public class EmpService {
         PdfFont bold = PdfFontFactory.createFont(StandardFonts.TIMES_BOLD);
         Text costCentreText = new Text("Cost Centre:").setFontSize(11).setFont(bold);
         Paragraph costCentrePara = new Paragraph().add(costCentreText)
-                                                    .add(" " + costCentre).setFontSize(10)
-                                                    .add("\n");
+                .add(" " + costCentre).setFontSize(10)
+                .add("\n");
         Text accountText = new Text("Account      :").setFontSize(11).setFont(bold);
         costCentrePara.add(accountText).add(" " + account).setFontSize(10);
         document.add(costCentrePara);
