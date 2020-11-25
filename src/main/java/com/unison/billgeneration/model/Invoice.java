@@ -16,6 +16,7 @@ public class Invoice {
     private String invoice_gst;
     private String invoice_total;
     private LocalDate invoice_date;
+    private LocalDate invoice_duedate;
     private LocalDateTime invoice_datetime;
     private String client_name;
     private String cost_centre;
@@ -60,6 +61,14 @@ public class Invoice {
 
     public void setInvoice_date(LocalDate invoice_date) {
         this.invoice_date = invoice_date;
+    }
+
+    public LocalDate getInvoice_duedate() {
+        return invoice_duedate;
+    }
+
+    public void setInvoice_duedate(LocalDate invoice_duedate) {
+        this.invoice_duedate = invoice_duedate;
     }
 
     public LocalDateTime getInvoice_datetime() {

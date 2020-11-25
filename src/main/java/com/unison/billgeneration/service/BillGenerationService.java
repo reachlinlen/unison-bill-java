@@ -37,6 +37,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -83,7 +84,9 @@ public class BillGenerationService {
     }
 
     private void saveInvoice(Row row, String client, String costCentre) {
-        DecimalFormat df = new DecimalFormat("#.00");
+        DecimalFormatSymbols comma = new DecimalFormatSymbols();
+        comma.setDecimalSeparator(',');
+        DecimalFormat df = new DecimalFormat("#.00", comma);
         Double invoiceAmt = row.getCell(3).getNumericCellValue() * (int)row.getCell(4).getNumericCellValue();
         Invoice invoice = new Invoice();
         String latestInvoice;
@@ -97,7 +100,9 @@ public class BillGenerationService {
             invoice.setInvoice_num(num);
         }
         invoice.setClient_name(client);
-        invoice.setInvoice_date(row.getCell(5).getLocalDateTimeCellValue().toLocalDate());
+        LocalDate date = row.getCell(5).getLocalDateTimeCellValue().toLocalDate();
+        invoice.setInvoice_date(date);
+        invoice.setInvoice_duedate(date.plusDays(45));
         invoice.setInvoice_datetime(LocalDateTime.now());
         invoice.setInvoice_amt(df.format(invoiceAmt));
         invoice.setInvoice_gst(df.format(invoiceAmt*GST));
