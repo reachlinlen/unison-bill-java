@@ -33,16 +33,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.print.Doc;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
 import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class BillGenerationService {
@@ -63,6 +60,7 @@ public class BillGenerationService {
 
     public ResponseEntity<Resource> generateBill(String projName, String client, MultipartFile file) throws FileNotFoundException, IOException {
         Workbook wb = new XSSFWorkbook(file.getInputStream());
+        List<String> invNumbers = new ArrayList<String>();
         for (Sheet sheet: wb) {
             for (int i=1;i <= sheet.getLastRowNum();i++) {
                 String latestInvNum;
@@ -75,7 +73,11 @@ public class BillGenerationService {
                     latestInvNum = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(invoiceStartNum));
                 }
                 saveInvoice(sheet.getRow(i), client, latestInvNum);
-                String dest = pdfLocation + i + ".pdf";
+                String fileName = client + "-" + latestInvNum + ".pdf";
+                fileName = fileName.replaceAll(" ", "_").replaceAll("/","-");
+                String dest = pdfLocation + fileName;
+                invNumbers.add(fileName);
+                System.out.println("B4 Pdf Writer");
                 PdfWriter pdfWriter = new PdfWriter(dest);
                 Document document = new Document(new PdfDocument(pdfWriter));
                 addStaticContent(document);
@@ -87,12 +89,24 @@ public class BillGenerationService {
                 document.close();
             }
         }
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        System.out.println("PDF Alredy written");
+        InputStream inputStream = null;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try {
+            inputStream = new FileInputStream(pdfLocation + invNumbers.get(0) + ".pdf");
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                baos.write(buffer, 0, bytesRead);
+            }
+        } catch (FileNotFoundException fnfe) {
+            fnfe.printStackTrace();
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment: filename=\""+ "unison" + "\"")
-                .contentLength(out.size())
+                .contentLength(baos.size())
                 .contentType(MediaType.parseMediaType("application/octet-stream"))
-                .body(new InputStreamResource(new ByteArrayInputStream(out.toByteArray())));
+                .body(new InputStreamResource(new ByteArrayInputStream(baos.toByteArray())));
     }
 
     private void saveInvoice(Row row, String client, String latestInvNum) {
@@ -326,7 +340,7 @@ public class BillGenerationService {
         PdfFont bold = PdfFontFactory.createFont(StandardFonts.TIMES_BOLD);
         Text footerText = new Text("TAX REGISTRATION NUMBER: 201225652C").setFontSize(11).setFont(bold);
         Paragraph footer = new Paragraph().add("\n").add("\n").add(footerText)
-                                            .setFontColor(DeviceGray.makeLighter(DeviceGray.GRAY))
+                                            .setFontColor(DeviceGray.makeLighter(DeviceGray.BLACK))
                                             .setTextAlignment(TextAlignment.CENTER);
         document.add(footer);
     }
