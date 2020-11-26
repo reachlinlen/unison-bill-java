@@ -18,6 +18,7 @@ import com.itextpdf.layout.property.UnitValue;
 import com.itextpdf.layout.property.VerticalAlignment;
 import com.unison.billgeneration.model.Invoice;
 import com.unison.billgeneration.repository.BillGenerationRepository;
+import com.unison.billgeneration.repository.ClientInvoiceNumberRepository;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -48,17 +49,18 @@ public class BillGenerationService {
 
     private final String pdfLocation;
     private final Float GST;
-    private final int invoiceStartNum;
 
     @Autowired
-    public BillGenerationService(@Value("${pdf.storage}") String pdfLocation, @Value("${GST}") Float GST, @Value("${invoice.start.number}") int invoiceStartNum) {
+    public BillGenerationService(@Value("${pdf.storage}") String pdfLocation, @Value("${GST}") Float GST) {
         this.pdfLocation = pdfLocation;
         this.GST = GST;
-        this.invoiceStartNum = invoiceStartNum;
     }
 
     @Autowired
     private BillGenerationRepository billGenerationRepository;
+
+    @Autowired
+    private ClientInvoiceNumberService clientInvoiceNumberService;
 
     public ResponseEntity<Resource> generateBill(String projName, String client, MultipartFile file) throws FileNotFoundException, IOException {
         String home = System.getProperty("user.home");
@@ -66,15 +68,8 @@ public class BillGenerationService {
         List<String> invNumbers = new ArrayList<String>();
         for (Sheet sheet: wb) {
             for (int i=1;i <= sheet.getLastRowNum();i++) {
-                String latestInvNum;
-                try {
-                    latestInvNum = billGenerationRepository.getClientInvoice(client);
-                    int lastInvNum = Integer.parseInt(latestInvNum.substring(sheet.getRow(i).getCell(6).getStringCellValue().length()));
-                    latestInvNum = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(++lastInvNum));
-                }
-                catch (NullPointerException npe) {
-                    latestInvNum = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(invoiceStartNum));
-                }
+                int lastInvNum = clientInvoiceNumberService.getLatestInvNum(client);
+                String latestInvNum = latestInvNum = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(++lastInvNum));
                 saveInvoice(sheet.getRow(i), client, latestInvNum);
                 String fileName = client + "-" + latestInvNum + ".pdf";
                 fileName = fileName.replaceAll(" ", "_").replaceAll("/","-");
@@ -89,6 +84,7 @@ public class BillGenerationService {
                 addStaticPayment(document);
                 addFooter(document);
                 document.close();
+                clientInvoiceNumberService.incrementInvNum(client, lastInvNum);
             }
         }
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
