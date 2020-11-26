@@ -18,6 +18,7 @@ import com.itextpdf.layout.property.UnitValue;
 import com.itextpdf.layout.property.VerticalAlignment;
 import com.unison.billgeneration.model.Invoice;
 import com.unison.billgeneration.repository.BillGenerationRepository;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -32,6 +33,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.print.Doc;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
@@ -59,19 +61,20 @@ public class BillGenerationService {
     @Autowired
     private BillGenerationRepository billGenerationRepository;
 
-    public ResponseEntity<Resource> generateBill(String attention, String PONum, String projName, String costCentre, String account, String client, MultipartFile file) throws FileNotFoundException, IOException {
+    public ResponseEntity<Resource> generateBill(String projName, String client, MultipartFile file) throws FileNotFoundException, IOException {
         Workbook wb = new XSSFWorkbook(file.getInputStream());
         for (Sheet sheet: wb) {
             for (int i=1;i <= sheet.getLastRowNum();i++) {
-                saveInvoice(sheet.getRow(i), client, costCentre);
+                saveInvoice(sheet.getRow(i), client);
                 String dest = pdfLocation + i + ".pdf";
                 PdfWriter pdfWriter = new PdfWriter(dest);
                 Document document = new Document(new PdfDocument(pdfWriter));
                 addStaticContent(document);
                 addBillTo(document, sheet.getRow(i));
-                billingInfo(document, attention, PONum, costCentre, account, projName);
+                billingInfo(document, projName, sheet.getRow(i));
                 addTable(document, sheet.getRow(i));
                 addStaticPayment(document);
+                addFooter(document);
                 document.close();
             }
         }
@@ -83,10 +86,8 @@ public class BillGenerationService {
                 .body(new InputStreamResource(new ByteArrayInputStream(out.toByteArray())));
     }
 
-    private void saveInvoice(Row row, String client, String costCentre) {
-        DecimalFormatSymbols comma = new DecimalFormatSymbols();
-        comma.setDecimalSeparator(',');
-        DecimalFormat df = new DecimalFormat("#.00", comma);
+    private void saveInvoice(Row row, String client) {
+        DecimalFormat df = new DecimalFormat("#.00");
         Double invoiceAmt = row.getCell(3).getNumericCellValue() * (int)row.getCell(4).getNumericCellValue();
         Invoice invoice = new Invoice();
         String latestInvoice;
@@ -107,7 +108,7 @@ public class BillGenerationService {
         invoice.setInvoice_amt(df.format(invoiceAmt));
         invoice.setInvoice_gst(df.format(invoiceAmt*GST));
         invoice.setInvoice_total(df.format(invoiceAmt*(1+GST)));
-        invoice.setCost_centre(costCentre);
+        invoice.setCost_centre(getData(row, 11));
         invoice.setResource(row.getCell(1).getStringCellValue());
         invoice.setInvoice_status("PENDING");
         billGenerationRepository.save(invoice);
@@ -206,25 +207,28 @@ public class BillGenerationService {
         document.add(table);
     }
 
-    private void billingInfo(Document document, String attention, String PONum, String costCentre, String account, String projName) throws IOException {
+    private void billingInfo(Document document, String projName, Row row) throws IOException {
         PdfFont bold = PdfFontFactory.createFont(StandardFonts.TIMES_BOLD);
         Text costCentreText = new Text("Cost Centre:").setFontSize(11).setFont(bold);
+        String PONum = getData(row, 9);
+        String account = getData(row, 10);
+        String costCentre = getData(row, 11);
         Paragraph costCentrePara = new Paragraph().add(costCentreText)
                 .add(" " + costCentre).setFontSize(10)
                 .add("\n");
         Text accountText = new Text("Account      :").setFontSize(11).setFont(bold);
         costCentrePara.add(accountText).add(" " + account).setFontSize(10);
         document.add(costCentrePara);
-        String attn = "Attn         : " + attention + "\n" + "PO No     : " + PONum + "\n" + "\n";
+        String attn = "Attn         : " + row.getCell(8).getStringCellValue() + "\n" + "PO No     : " + PONum + "\n" + "\n";
         if (!projName.isEmpty()) {
-            attn = "Attn         : " + attention + "\n" + "PO No    : " + PONum + "\n" + "Project Name: " + projName + "\n" + "\n";
+            attn = "Attn         : " + row.getCell(8).getStringCellValue() + "\n" + "PO No    : " + PONum + "\n" + "Project Name: " + projName + "\n" + "\n";
         }
         Paragraph attnPara = new Paragraph().add(attn).setFontSize(10);
         document.add(attnPara);
     }
 
     private void addTable(Document document, Row row) {
-        DecimalFormat df = new DecimalFormat("#.00");
+        DecimalFormat df = new DecimalFormat("#,###,###.00");
         Table table = new Table(UnitValue.createPercentArray(10));
         Cell cell0 = new Cell(1, 1)
                 .add(new Paragraph("PO Line - "))
@@ -317,5 +321,22 @@ public class BillGenerationService {
                 .setTextAlignment(TextAlignment.RIGHT);
         table.addCell(totalCell2);
         document.add(table);
+    }
+
+    private void addFooter(Document document) throws IOException {
+        PdfFont bold = PdfFontFactory.createFont(StandardFonts.TIMES_BOLD);
+        Text footerText = new Text("TAX REGISTRATION NUMBER: 201225652C").setFontSize(11).setFont(bold);
+        Paragraph footer = new Paragraph().add("\n").add("\n").add(footerText)
+                                            .setFontColor(DeviceGray.makeLighter(DeviceGray.GRAY))
+                                            .setTextAlignment(TextAlignment.CENTER);
+        document.add(footer);
+    }
+
+    private String getData(Row row, int cellNum) {
+        if (row.getCell(cellNum).getCellType().equals(CellType.NUMERIC)) {
+            return Integer.toString((int)row.getCell(cellNum).getNumericCellValue());
+        } else {
+            return row.getCell(cellNum).getStringCellValue();
+        }
     }
 }

@@ -21,14 +21,10 @@ public class BillGenerationController {
     @PutMapping("/emp")
     public ResponseEntity<Resource> generateBillForEmp(MultipartHttpServletRequest request) throws IOException, FileNotFoundException {
         System.out.println("In controller");
-        String attention = request.getParameter("attention");
-        String PONum = request.getParameter("PONum");
         String projName = request.getParameter("projName");
-        String costCentre = request.getParameter("costCentre");
-        String account = request.getParameter("account");
         String clients = request.getParameter("clients");
         MultipartFile file = request.getFile("file");
-        return billGenerationService.generateBill(attention, PONum, projName, costCentre, account, clients, file);
+        return billGenerationService.generateBill(projName, clients, file);
     }
 }
 
