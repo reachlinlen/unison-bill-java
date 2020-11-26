@@ -59,6 +59,7 @@ public class BillGenerationService {
     private BillGenerationRepository billGenerationRepository;
 
     public ResponseEntity<Resource> generateBill(String projName, String client, MultipartFile file) throws FileNotFoundException, IOException {
+        String home = System.getProperty("user.home");
         Workbook wb = new XSSFWorkbook(file.getInputStream());
         List<String> invNumbers = new ArrayList<String>();
         for (Sheet sheet: wb) {
@@ -75,9 +76,8 @@ public class BillGenerationService {
                 saveInvoice(sheet.getRow(i), client, latestInvNum);
                 String fileName = client + "-" + latestInvNum + ".pdf";
                 fileName = fileName.replaceAll(" ", "_").replaceAll("/","-");
-                String dest = pdfLocation + fileName;
-                invNumbers.add(fileName);
-                System.out.println("B4 Pdf Writer");
+                String dest = home + pdfLocation + fileName;
+                invNumbers.add(dest);
                 PdfWriter pdfWriter = new PdfWriter(dest);
                 Document document = new Document(new PdfDocument(pdfWriter));
                 addStaticContent(document);
@@ -89,11 +89,11 @@ public class BillGenerationService {
                 document.close();
             }
         }
-        System.out.println("PDF Alredy written");
         InputStream inputStream = null;
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try {
-            inputStream = new FileInputStream(pdfLocation + invNumbers.get(0) + ".pdf");
+            System.out.println(invNumbers.get(0));
+            inputStream = new FileInputStream(invNumbers.get(0));
             byte[] buffer = new byte[1024];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
