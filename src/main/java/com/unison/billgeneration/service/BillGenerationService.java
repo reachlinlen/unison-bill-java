@@ -40,6 +40,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 public class BillGenerationService {
@@ -89,23 +91,29 @@ public class BillGenerationService {
                 document.close();
             }
         }
-        InputStream inputStream = null;
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ZipOutputStream zos = new ZipOutputStream(baos);
         try {
-            System.out.println(invNumbers.get(0));
-            inputStream = new FileInputStream(invNumbers.get(0));
-            byte[] buffer = new byte[1024];
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                baos.write(buffer, 0, bytesRead);
+            for (String pdfFile:invNumbers) {
+                File fileToZip = new File(pdfFile);
+                FileInputStream inputStream = new FileInputStream(fileToZip);
+                ZipEntry zipEntry = new ZipEntry(fileToZip.getName());
+                zos.putNextEntry(zipEntry);
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    zos.write(buffer, 0, bytesRead);
+                }
+                inputStream.close();
             }
+            zos.close();
         } catch (FileNotFoundException fnfe) {
             fnfe.printStackTrace();
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment: filename=\""+ "unison" + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment: filename=\""+ "unison.zip" + "\"")
                 .contentLength(baos.size())
-                .contentType(MediaType.parseMediaType("application/octet-stream"))
+                .contentType(MediaType.parseMediaType("application/zip"))
                 .body(new InputStreamResource(new ByteArrayInputStream(baos.toByteArray())));
     }
 
