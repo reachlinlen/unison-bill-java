@@ -65,12 +65,21 @@ public class BillGenerationService {
         Workbook wb = new XSSFWorkbook(file.getInputStream());
         for (Sheet sheet: wb) {
             for (int i=1;i <= sheet.getLastRowNum();i++) {
-                saveInvoice(sheet.getRow(i), client);
+                String latestInvNum;
+                try {
+                    latestInvNum = billGenerationRepository.getClientInvoice(client);
+                    int lastInvNum = Integer.parseInt(latestInvNum.substring(sheet.getRow(i).getCell(6).getStringCellValue().length()));
+                    latestInvNum = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(++lastInvNum));
+                }
+                catch (NullPointerException npe) {
+                    latestInvNum = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(invoiceStartNum));
+                }
+                saveInvoice(sheet.getRow(i), client, latestInvNum);
                 String dest = pdfLocation + i + ".pdf";
                 PdfWriter pdfWriter = new PdfWriter(dest);
                 Document document = new Document(new PdfDocument(pdfWriter));
                 addStaticContent(document);
-                addBillTo(document, sheet.getRow(i));
+                addBillTo(document, sheet.getRow(i), latestInvNum);
                 billingInfo(document, projName, sheet.getRow(i));
                 addTable(document, sheet.getRow(i));
                 addStaticPayment(document);
@@ -86,20 +95,11 @@ public class BillGenerationService {
                 .body(new InputStreamResource(new ByteArrayInputStream(out.toByteArray())));
     }
 
-    private void saveInvoice(Row row, String client) {
+    private void saveInvoice(Row row, String client, String latestInvNum) {
         DecimalFormat df = new DecimalFormat("#.00");
         Double invoiceAmt = row.getCell(3).getNumericCellValue() * (int)row.getCell(4).getNumericCellValue();
         Invoice invoice = new Invoice();
-        String latestInvoice;
-        try {
-            latestInvoice = billGenerationRepository.getClientInvoice(client);
-            int lastInvNum = Integer.parseInt(latestInvoice.substring(row.getCell(6).getStringCellValue().length()));
-            invoice.setInvoice_num(row.getCell(6).getStringCellValue().concat(Integer.toString(++lastInvNum)));
-        }
-        catch (NullPointerException npe) {
-            String num = row.getCell(6).getStringCellValue().concat(Integer.toString(invoiceStartNum));
-            invoice.setInvoice_num(num);
-        }
+        invoice.setInvoice_num(latestInvNum);
         invoice.setClient_name(client);
         LocalDate date = row.getCell(5).getLocalDateTimeCellValue().toLocalDate();
         invoice.setInvoice_date(date);
@@ -178,7 +178,7 @@ public class BillGenerationService {
         document.add(table);
     }
 
-    private void addBillTo(Document document, Row row) throws IOException {
+    private void addBillTo(Document document, Row row, String latestInvNum) throws IOException {
         PdfFont bold = PdfFontFactory.createFont(StandardFonts.TIMES_BOLD);
         Text billToText = new Text("Bill To:").setFontSize(12);
         Paragraph billTo = new Paragraph().add(billToText).setFont(bold);
@@ -196,10 +196,9 @@ public class BillGenerationService {
                 .setVerticalAlignment(VerticalAlignment.TOP);
         table.addCell(cell2);
         LocalDate date = row.getCell(5).getLocalDateTimeCellValue().toLocalDate();
-        String invoiceNum = row.getCell(6).getStringCellValue();
         Cell cell3 = new Cell(1,1).add(new Paragraph(date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))))
                 .add(new Paragraph(date.plusDays(45).format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))))
-                .add(new Paragraph(invoiceNum))
+                .add(new Paragraph(latestInvNum))
                 .setTextAlignment(TextAlignment.LEFT)
                 .setBorder(Border.NO_BORDER).setFontSize(10)
                 .setVerticalAlignment(VerticalAlignment.TOP);
