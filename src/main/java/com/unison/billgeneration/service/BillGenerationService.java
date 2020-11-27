@@ -18,7 +18,6 @@ import com.itextpdf.layout.property.UnitValue;
 import com.itextpdf.layout.property.VerticalAlignment;
 import com.unison.billgeneration.model.Invoice;
 import com.unison.billgeneration.repository.BillGenerationRepository;
-import com.unison.billgeneration.repository.ClientInvoiceNumberRepository;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -60,7 +59,7 @@ public class BillGenerationService {
     private BillGenerationRepository billGenerationRepository;
 
     @Autowired
-    private ClientInvoiceNumberService clientInvoiceNumberService;
+    private ClientInvoiceService clientInvoiceService;
 
     public ResponseEntity<Resource> generateBill(String projName, String client, MultipartFile file) throws FileNotFoundException, IOException {
         String home = System.getProperty("user.home");
@@ -68,7 +67,7 @@ public class BillGenerationService {
         List<String> invNumbers = new ArrayList<String>();
         for (Sheet sheet: wb) {
             for (int i=1;i <= sheet.getLastRowNum();i++) {
-                int lastInvNum = clientInvoiceNumberService.getLatestInvNum(client);
+                int lastInvNum = clientInvoiceService.getLatestInvNum(client);
                 String latestInvNum = latestInvNum = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(++lastInvNum));
                 saveInvoice(sheet.getRow(i), client, latestInvNum);
                 String fileName = client + "-" + latestInvNum + ".pdf";
@@ -84,7 +83,7 @@ public class BillGenerationService {
                 addStaticPayment(document);
                 addFooter(document);
                 document.close();
-                clientInvoiceNumberService.incrementInvNum(client, lastInvNum);
+                clientInvoiceService.incrementInvNum(client, lastInvNum);
             }
         }
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
