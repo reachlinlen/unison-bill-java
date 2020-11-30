@@ -88,23 +88,23 @@ public class BillGenerationService {
         }
         for (Sheet sheet: wb) {
             for (int i=1;i <= sheet.getLastRowNum();i++) {
-                int lastInvNum = clientInvoiceService.getLatestInvNum(client);
-                String latestInvNum = latestInvNum = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(++lastInvNum));
-                saveInvoice(sheet.getRow(i), client, latestInvNum);
-                String fileName = client + "-" + latestInvNum + ".pdf";
+                int newInvNum = clientInvoiceService.getLatestInvNum(client);
+                String latestInv = sheet.getRow(i).getCell(6).getStringCellValue().concat(Integer.toString(newInvNum));
+                saveInvoice(sheet.getRow(i), client, latestInv);
+                String fileName = client + "-" + latestInv + ".pdf";
                 fileName = fileName.replaceAll(" ", "_").replaceAll("/","-");
                 String dest = fileLoc + fileName;
                 invNumbers.add(dest);
                 PdfWriter pdfWriter = new PdfWriter(dest);
                 Document document = new Document(new PdfDocument(pdfWriter));
                 addStaticContent(document);
-                addBillTo(document, sheet.getRow(i), latestInvNum);
+                addBillTo(document, sheet.getRow(i), latestInv);
                 billingInfo(document, projName, sheet.getRow(i));
                 addTable(document, sheet.getRow(i));
                 addStaticPayment(document);
                 addFooter(document);
                 document.close();
-                clientInvoiceService.incrementInvNum(client, lastInvNum);
+                clientInvoiceService.incrementInvNum(client, ++newInvNum);
             }
         }
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
