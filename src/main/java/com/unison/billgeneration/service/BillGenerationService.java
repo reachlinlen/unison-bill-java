@@ -81,7 +81,6 @@ public class BillGenerationService {
             } else if (line2.toLowerCase().contains(FILE_LOC.toLowerCase())) {
                 fileLoc = home + line2.substring(line2.indexOf('=')+1).trim();
             }
-            System.out.println(fileLoc);
         } catch (FileNotFoundException fnfe) {
             fnfe.printStackTrace();
         } catch (IOException ioe) {
