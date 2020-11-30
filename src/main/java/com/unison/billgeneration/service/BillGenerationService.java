@@ -46,13 +46,18 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class BillGenerationService {
 
-    private final String pdfLocation;
+    private final String configFileLoc;
     private final Float GST;
+    private final String configFile;
+    private final String FILE_LOC = "File Location=";
 
     @Autowired
-    public BillGenerationService(@Value("${pdf.storage}") String pdfLocation, @Value("${GST}") Float GST) {
-        this.pdfLocation = pdfLocation;
+    public BillGenerationService(@Value("${config.file.location}") String configFileLoc,
+                                 @Value("${GST}") Float GST,
+                                 @Value("${config.file}") String configFile) {
+        this.configFileLoc = configFileLoc;
         this.GST = GST;
+        this.configFile = configFile;
     }
 
     @Autowired
@@ -61,10 +66,27 @@ public class BillGenerationService {
     @Autowired
     private ClientInvoiceService clientInvoiceService;
 
-    public ResponseEntity<Resource> generateBill(String projName, String client, MultipartFile file) throws FileNotFoundException, IOException {
-        String home = System.getProperty("user.home");
+    public ResponseEntity<Resource> generateBill(String projName, String client, MultipartFile file) throws IOException {
         Workbook wb = new XSSFWorkbook(file.getInputStream());
         List<String> invNumbers = new ArrayList<String>();
+        String home = System.getProperty("user.home");
+        BufferedReader reader;
+        String fileLoc = "";
+        try {
+            reader = new BufferedReader(new FileReader(home+configFileLoc+configFile));
+            String line1 = reader.readLine();
+            String line2 = reader.readLine();
+            if (line1.toLowerCase().contains(FILE_LOC.toLowerCase())) {
+                fileLoc = home + line1.substring(line1.indexOf('=')+1).trim();
+            } else if (line2.toLowerCase().contains(FILE_LOC.toLowerCase())) {
+                fileLoc = home + line2.substring(line2.indexOf('=')+1).trim();
+            }
+            System.out.println(fileLoc);
+        } catch (FileNotFoundException fnfe) {
+            fnfe.printStackTrace();
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
         for (Sheet sheet: wb) {
             for (int i=1;i <= sheet.getLastRowNum();i++) {
                 int lastInvNum = clientInvoiceService.getLatestInvNum(client);
@@ -72,7 +94,7 @@ public class BillGenerationService {
                 saveInvoice(sheet.getRow(i), client, latestInvNum);
                 String fileName = client + "-" + latestInvNum + ".pdf";
                 fileName = fileName.replaceAll(" ", "_").replaceAll("/","-");
-                String dest = home + pdfLocation + fileName;
+                String dest = fileLoc + fileName;
                 invNumbers.add(dest);
                 PdfWriter pdfWriter = new PdfWriter(dest);
                 Document document = new Document(new PdfDocument(pdfWriter));
